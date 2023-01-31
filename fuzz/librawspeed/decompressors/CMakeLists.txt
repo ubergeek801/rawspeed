@@ -10,7 +10,7 @@ endmacro()
 add_subdirectory(HuffmanTable)
 
 set(DECOMPRESSORS
-  "Cr2Decompressor"
+  "Cr2LJpegDecoder"
   "CrwDecompressor"
   "DummyLJpegDecompressor"
   "FujiDecompressor"
@@ -19,9 +19,10 @@ set(DECOMPRESSORS
   "LJpegDecompressor"
   "NikonDecompressor"
   "OlympusDecompressor"
-  "PanasonicDecompressorV4"
-  "PanasonicDecompressorV5"
-  "PanasonicDecompressorV6"
+  "PanasonicV4Decompressor"
+  "PanasonicV5Decompressor"
+  "PanasonicV6Decompressor"
+  "PanasonicV7Decompressor"
   "PentaxDecompressor"
   "PhaseOneDecompressor"
   "SamsungV0Decompressor"
@@ -35,3 +36,22 @@ set(DECOMPRESSORS
 foreach(decompressor ${DECOMPRESSORS})
   add_simple_fuzzer(${decompressor})
 endforeach()
+
+
+function(add_specialized_fuzzer Name HuffmanTableImpl)
+  set(fuzzer "${Name}Fuzzer-${HuffmanTableImpl}")
+
+  rawspeed_add_executable(${fuzzer} ${Name}.cpp)
+  target_compile_definitions(${fuzzer}
+    PRIVATE
+    -DHuffmanTableImpl=${HuffmanTableImpl}
+    -DWITH_${HuffmanTableImpl}
+  )
+
+  add_fuzz_target(${fuzzer})
+
+  add_dependencies(HuffmanTableFuzzers ${fuzzer})
+endfunction()
+
+add_specialized_fuzzer("Cr2Decompressor" HuffmanTable)
+add_specialized_fuzzer("Cr2Decompressor" DummyHuffmanTable)

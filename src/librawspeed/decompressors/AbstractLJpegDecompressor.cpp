@@ -21,7 +21,8 @@
 */
 
 #include "decompressors/AbstractLJpegDecompressor.h"
-#include "common/Point.h"                       // for iPoint2D
+#include "adt/Point.h"                          // for iPoint2D
+#include "common/RawspeedException.h"           // for ThrowException
 #include "decoders/RawDecoderException.h"       // for ThrowRDE
 #include "decompressors/AbstractHuffmanTable.h" // for AbstractHuffmanTable
 #include "decompressors/HuffmanTable.h"         // for HuffmanTable, Huffma...
@@ -30,6 +31,7 @@
 #include <array>                                // for array
 #include <cassert>                              // for assert
 #include <memory>                               // for unique_ptr, make_unique
+#include <optional>                             // for optional
 #include <utility>                              // for move
 #include <vector>                               // for vector
 
@@ -45,7 +47,7 @@ AbstractLJpegDecompressor::AbstractLJpegDecompressor(ByteStream bs,
 
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
   // Yeah, sure, here it would be just dumb to leave this for production :)
-  if (mRaw->dim.x > 8896 || mRaw->dim.y > 6304) {
+  if (mRaw->dim.x > 19440 || mRaw->dim.y > 6304) {
     ThrowRDE("Unexpected image dimensions found: (%u; %u)", mRaw->dim.x,
              mRaw->dim.y);
   }
@@ -57,6 +59,7 @@ void AbstractLJpegDecompressor::decode() {
     ThrowRDE("Image did not start with SOI. Probably not an LJPEG");
 
   struct {
+    bool DRI = false;
     bool DHT = false;
     bool SOF = false;
     bool SOS = false;
@@ -102,6 +105,12 @@ void AbstractLJpegDecompressor::decode() {
       break;
     case JpegMarker::DQT:
       ThrowRDE("Not a valid RAW file.");
+    case JpegMarker::DRI:
+      if (FoundMarkers.DRI)
+        ThrowRDE("Found second DRI marker");
+      parseDRI(data);
+      FoundMarkers.DRI = true;
+      break;
     default: // Just let it skip to next marker
       break;
     }
@@ -249,18 +258,36 @@ void AbstractLJpegDecompressor::parseDHT(ByteStream dht) {
   }
 }
 
+void AbstractLJpegDecompressor::parseDRI(ByteStream dri) {
+  if (dri.getRemainSize() != 2)
+    ThrowRDE("Invalid DRI header length.");
+  if (uint16_t Ri = dri.getU16(); Ri != 0)
+    ThrowRDE("Non-zero restart interval not supported.");
+}
+
 JpegMarker AbstractLJpegDecompressor::getNextMarker(bool allowskip) {
-  uint8_t c0;
-  uint8_t c1 = input.getByte();
-  do {
-    c0 = c1;
-    c1 = input.getByte();
-  } while (allowskip && !(c0 == 0xFF && c1 != 0 && c1 != 0xFF));
+  auto peekMarker = [&]() -> std::optional<JpegMarker> {
+    uint8_t c0 = input.peekByte(0);
+    uint8_t c1 = input.peekByte(1);
 
-  if (!(c0 == 0xFF && c1 != 0 && c1 != 0xFF))
-    ThrowRDE("(Noskip) Expected marker not found. Probably corrupt file.");
+    if (c0 == 0xFF && c1 != 0 && c1 != 0xFF)
+      return static_cast<JpegMarker>(c1);
+    return {};
+  };
 
-  return static_cast<JpegMarker>(c1);
+  while (input.getRemainSize() >= 2) {
+    if (std::optional<JpegMarker> m = peekMarker()) {
+      input.skipBytes(2); // Skip the bytes we've just consumed.
+      return *m;
+    }
+    // Marker not found. Might there be leading padding bytes?
+    if (!allowskip)
+      break; // Nope, give up.
+    // Advance by a single(!) byte and try again.
+    input.skipBytes(1);
+  }
+
+  ThrowRDE("(Noskip) Expected marker not found. Probably corrupt file.");
 }
 
 } // namespace rawspeed

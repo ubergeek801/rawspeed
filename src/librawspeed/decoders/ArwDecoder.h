@@ -30,9 +30,8 @@
 
 namespace rawspeed {
 
-class CameraMetaData;
-
 class Buffer;
+class CameraMetaData;
 
 class ArwDecoder final : public AbstractTiffDecoder
 {
@@ -40,7 +39,7 @@ public:
   static bool isAppropriateDecoder(const TiffRootIFD* rootIFD,
                                    const Buffer& file);
   ArwDecoder(TiffRootIFDOwner&& root, const Buffer& file)
-      : AbstractTiffDecoder(move(root), file) {}
+      : AbstractTiffDecoder(std::move(root), file) {}
 
   RawImage decodeRawInternal() override;
   void decodeMetaDataInternal(const CameraMetaData* meta) override;
@@ -58,6 +57,7 @@ private:
   void GetWB() const;
   ByteStream in;
   int mShiftDownScale = 0;
+  int mShiftDownScaleForExif = 0;
 };
 
 } // namespace rawspeed

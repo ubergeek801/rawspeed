@@ -22,11 +22,11 @@
 #pragma once
 
 #include "common/Common.h" // for clampBits
-#include <algorithm>       // for generate_n
+#include <algorithm>       // for generate_n, max
 #include <cassert>         // for assert
 #include <functional>      // for function
 #include <iterator>        // for back_inserter
-#include <type_traits>     // for enable_if, is_convertible
+#include <type_traits>     // for enable_if
 #include <vector>          // for vector
 
 namespace rawspeed {
@@ -43,6 +43,9 @@ private:
 public:
   template <
       typename F,
+      typename = std::enable_if_t<!std::is_same_v<
+          SimpleLUT,
+          typename std::remove_cv_t<typename std::remove_reference_t<F>>>>,
       typename = std::enable_if<std::is_convertible_v<
           F, std::function<value_type(typename decltype(table)::size_type,
                                       typename decltype(table)::size_type)>>>>

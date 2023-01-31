@@ -20,9 +20,11 @@
 */
 
 #include "decoders/RafDecoder.h"
-#include "common/Common.h"                          // for BitOrder::LSB
-#include "common/Point.h"                           // for iPoint2D, iRecta...
-#include "decoders/RawDecoderException.h"           // for ThrowRDE
+#include "adt/Array2DRef.h"                         // for Array2DRef
+#include "adt/NotARational.h"                       // for NotARational
+#include "adt/Point.h"                              // for iPoint2D, iRecta...
+#include "common/Common.h"                          // for BitOrder, BitOrd...
+#include "decoders/RawDecoderException.h"           // for ThrowException
 #include "decompressors/FujiDecompressor.h"         // for FujiDecompressor
 #include "decompressors/UncompressedDecompressor.h" // for UncompressedDeco...
 #include "io/Buffer.h"                              // for Buffer
@@ -35,12 +37,12 @@
 #include "metadata/ColorFilterArray.h"              // for ColorFilterArray
 #include "tiff/TiffEntry.h"                         // for TiffEntry
 #include "tiff/TiffIFD.h"                           // for TiffRootIFD, Tif...
-#include "tiff/TiffTag.h"                           // for FUJI_RAWIMAGEFUL...
+#include "tiff/TiffTag.h"                           // for TiffTag, TiffTag...
 #include <array>                                    // for array
 #include <cassert>                                  // for assert
-#include <cstdint>                                  // for uint32_t, uint16_t
+#include <cstdint>                                  // for uint32_t
 #include <cstring>                                  // for memcmp
-#include <memory>                                   // for unique_ptr
+#include <memory>                                   // for unique_ptr, allo...
 #include <string>                                   // for string, operator==
 #include <vector>                                   // for vector
 
@@ -346,14 +348,18 @@ int RafDecoder::isCompressed() const {
   if (width == 0 || height == 0 || width > 11808 || height > 8754)
     ThrowRDE("Unexpected image dimensions found: (%u; %u)", width, height);
 
+  uint32_t bps;
+  if (raw->hasEntry(TiffTag::FUJI_BITSPERSAMPLE))
+    bps = raw->getEntry(TiffTag::FUJI_BITSPERSAMPLE)->getU32();
+  else
+    bps = 12;
+
   uint32_t count = raw->getEntry(TiffTag::FUJI_STRIPBYTECOUNTS)->getU32();
 
-  // The uncompressed raf's can be 12/14 bpp, so if it is less than that,
-  // then we are likely in compressed raf.
-  // FIXME: this can't be the correct way to detect this. But i'm not seeing
+  // FIXME: This is not an ideal way to detect compression, but I'm not seeing
   // anything in the diff between exiv2/exiftool dumps of {un,}compressed raws.
   // Maybe we are supposed to check for valid FujiDecompressor::FujiHeader ?
-  return count * 8 / (width * height) < 12;
+  return count * 8 / (width * height) < bps;
 }
 
 } // namespace rawspeed

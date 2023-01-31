@@ -19,16 +19,18 @@
 */
 
 #include "metadata/ColorFilterArray.h"
-#include "common/Common.h"                // for writeLog, DEBUG_PRIO::EXTRA
-#include "common/Point.h"                 // for iPoint2D, iPoint2D::value_...
-#include "decoders/RawDecoderException.h" // for ThrowRDE
-#include <algorithm>                      // for fill
+#include "adt/Point.h"                    // for iPoint2D, iPoint2D::value_...
+#include "common/Common.h"                // for writeLog, DEBUG_PRIO, DEBU...
+#include "decoders/RawDecoderException.h" // for ThrowException, ThrowRDE
+#include <algorithm>                      // for copy, fill_n, fill, max
+#include <cassert>                        // for assert
 #include <cinttypes>                      // for PRId64
+#include <cmath>                          // for abs
 #include <cstdarg>                        // for va_arg, va_end, va_list
-#include <cstdlib>                        // for size_t, abs
+#include <cstdlib>                        // for abs, size_t
 #include <map>                            // for map
 #include <stdexcept>                      // for out_of_range
-#include <string>                         // for string
+#include <string>                         // for string, basic_string
 
 using std::vector;
 
@@ -43,6 +45,11 @@ ColorFilterArray::ColorFilterArray(const iPoint2D &_size) {
 
 void ColorFilterArray::setSize(const iPoint2D& _size)
 {
+  if (_size == iPoint2D(0, 0))
+    return;
+
+  assert(_size.hasPositiveArea() && "CFA must have positive size.");
+
   size = _size;
 
   if (size.area() > 36) {
@@ -84,11 +91,11 @@ void ColorFilterArray::setCFA( iPoint2D in_size, ... )
   va_end (arguments);
 }
 
-void ColorFilterArray::shiftLeft(int n) {
+void ColorFilterArray::shiftRight(int n) {
   if (cfa.empty())
     ThrowRDE("No CFA size set (or set to zero)");
 
-  writeLog(DEBUG_PRIO::EXTRA, "Shift left:%d", n);
+  writeLog(DEBUG_PRIO::EXTRA, "Shift right:%d", n);
   n %= size.x;
   if (n == 0)
     return;
@@ -110,6 +117,7 @@ void ColorFilterArray::shiftDown(int n) {
   n %= size.y;
   if (n == 0)
     return;
+
   vector<CFAColor> tmp(size.area());
   for (int y = 0; y < size.y; ++y) {
     for (int x = 0; x < size.x; ++x) {
@@ -153,7 +161,8 @@ uint32_t ColorFilterArray::shiftDcrawFilter(uint32_t filter, int x, int y) {
   // A shift in y direction means rotating the whole int by 4 bits.
   y *= 4;
   y = y >= 0 ? y % 32 : 32 - ((-y) % 32);
-  filter = (filter >> y) | (filter << (32 - y));
+  if (y != 0)
+    filter = (filter >> y) | (filter << (32 - y));
 
   return filter;
 }
@@ -193,10 +202,13 @@ static uint32_t toDcrawColor(CFAColor c) {
   case CFAColor::BLUE:
     return 2;
   case CFAColor::YELLOW:
+  case CFAColor::WHITE:
     return 3;
-  default:
+  case CFAColor::UNKNOWN:
+  case CFAColor::END:
     throw out_of_range(ColorFilterArray::colorToString(c));
   }
+  __builtin_unreachable();
 }
 
 uint32_t ColorFilterArray::getDcrawFilter() const {
@@ -206,6 +218,11 @@ uint32_t ColorFilterArray::getDcrawFilter() const {
 
   if (cfa.empty() || size.x > 2 || size.y > 8 || !isPowerOfTwo(size.y))
     return 1;
+
+  // FIXME: the idea here is that for a given CFA, there are at most 4 unique
+  // colors in CFA, *AND* `toDcrawColor()` returns an unique `0b??` pattern
+  // for each of these 4 *IN THE GIVEN CFA*.
+  // We don't validate that invariant presently.
 
   uint32_t ret = 0;
   for (int x = 0; x < 2; x++) {

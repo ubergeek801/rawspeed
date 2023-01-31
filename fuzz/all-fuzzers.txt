@@ -1,7 +1,10 @@
 CiffParserFuzzer-GetDecoder
 CiffParserFuzzer-GetDecoder-Decode
-Cr2DecompressorFuzzer
+Cr2DecompressorFuzzer-DummyHuffmanTable
+Cr2DecompressorFuzzer-HuffmanTable
+Cr2LJpegDecoderFuzzer
 CrwDecompressorFuzzer
+DngOpcodesFuzzer
 DummyLJpegDecompressorFuzzer
 FiffParserFuzzer-GetDecoder
 FiffParserFuzzer-GetDecoder-Decode
@@ -71,9 +74,10 @@ KodakDecompressorFuzzer
 LJpegDecompressorFuzzer
 NikonDecompressorFuzzer
 OlympusDecompressorFuzzer
-PanasonicDecompressorV4Fuzzer
-PanasonicDecompressorV5Fuzzer
-PanasonicDecompressorV6Fuzzer
+PanasonicV4DecompressorFuzzer
+PanasonicV5DecompressorFuzzer
+PanasonicV6DecompressorFuzzer
+PanasonicV7DecompressorFuzzer
 PentaxDecompressorFuzzer
 PhaseOneDecompressorFuzzer
 RawParserFuzzer-GetDecoder

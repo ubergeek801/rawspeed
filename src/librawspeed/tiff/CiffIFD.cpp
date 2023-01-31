@@ -21,24 +21,23 @@
 */
 
 #include "tiff/CiffIFD.h"
+#include "adt/NORangesSet.h"             // for NORangesSet
 #include "common/Common.h"               // for isIn
-#include "common/NORangesSet.h"          // for set
+#include "io/Buffer.h"                   // for Buffer
 #include "io/ByteStream.h"               // for ByteStream
-#include "parsers/CiffParserException.h" // for ThrowCPE
+#include "parsers/CiffParserException.h" // for ThrowException, ThrowCPE
+#include "tiff/CiffEntry.h"              // for CiffEntry, CiffDataType
+#include <algorithm>                     // for copy, max, any_of
 #include <cassert>                       // for assert
-#include <initializer_list>              // for initializer_list
 #include <map>                           // for map, operator!=, _Rb_tree_c...
 #include <memory>                        // for unique_ptr, make_unique
 #include <string>                        // for operator==, string
 #include <utility>                       // for move, pair
-#include <vector>                        // for vector, vector<>::size_type
+#include <vector>                        // for vector, vector<>::const_ite...
 
 using std::vector;
-using std::unique_ptr;
 
 namespace rawspeed {
-
-class Buffer;
 
 void CiffIFD::parseIFDEntry(NORangesSet<Buffer>* valueDatas,
                             const ByteStream& valueData,
@@ -60,7 +59,7 @@ void CiffIFD::parseIFDEntry(NORangesSet<Buffer>* valueDatas,
     // Will we ever look for this entry?
     if (!isIn(t->tag, CiffTagsWeCareAbout))
       return;
-    add(move(t));
+    add(std::move(t));
   }
 }
 
@@ -154,12 +153,12 @@ void CiffIFD::add(std::unique_ptr<CiffIFD> subIFD) {
   // We are good, and actually can add this sub-IFD, right?
   subIFD->recursivelyCheckSubIFDs(0);
 
-  mSubIFD.push_back(move(subIFD));
+  mSubIFD.push_back(std::move(subIFD));
 }
 
 void CiffIFD::add(std::unique_ptr<CiffEntry> entry) {
   assert(isIn(entry->tag, CiffTagsWeCareAbout));
-  mEntry[entry->tag] = move(entry);
+  mEntry[entry->tag] = std::move(entry);
   assert(mEntry.size() <= CiffTagsWeCareAbout.size());
 }
 

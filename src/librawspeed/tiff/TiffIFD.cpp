@@ -22,18 +22,19 @@
 */
 
 #include "tiff/TiffIFD.h"
+#include "adt/NORangesSet.h"          // for NORangesSet
 #include "common/Common.h"            // for trimSpaces
-#include "common/NORangesSet.h"       // for set
-#include "common/RawspeedException.h" // for RawspeedException
+#include "common/RawspeedException.h" // for ThrowException, RawspeedException
 #include "io/IOException.h"           // for IOException
 #include "tiff/TiffEntry.h"           // for TiffEntry
-#include "tiff/TiffTag.h"             // for TiffTag, MAKE, DNGPRIVATEDATA
+#include "tiff/TiffTag.h"             // for TiffTag, TiffTag::MAKE, TiffTa...
+#include <algorithm>                  // for copy, max
 #include <cassert>                    // for assert
-#include <map>                        // for map, operator!=, _Rb_tree_cons...
-#include <memory>                     // for unique_ptr, make_unique
-#include <string>                     // for string, operator==
+#include <map>                        // for map, operator!=, operator==
+#include <memory>                     // for unique_ptr, make_unique, alloc...
+#include <string>                     // for string, operator==, basic_string
 #include <utility>                    // for move, pair
-#include <vector>                     // for vector
+#include <vector>                     // for vector<>::iterator, vector
 
 using std::vector;
 
@@ -64,7 +65,7 @@ void TiffIFD::parseIFDEntry(NORangesSet<Buffer>* ifds, ByteStream& bs) {
       // used anywhere right now, let's not
       //   add(parseDngPrivateData(ifds, t.get()));
       // but just add them as entries. (e.g. ArwDecoder uses WB from them)
-      add(move(t));
+      add(std::move(t));
       break;
 
     case TiffTag::MAKERNOTE:
@@ -80,11 +81,11 @@ void TiffIFD::parseIFDEntry(NORangesSet<Buffer>* ifds, ByteStream& bs) {
       break;
 
     default:
-      add(move(t));
+      add(std::move(t));
     }
   } catch (const RawspeedException&) { // Unparsable private data are added as
                                        // entries
-    add(move(t));
+    add(std::move(t));
   }
 }
 
@@ -177,6 +178,8 @@ TiffRootIFDOwner TiffIFD::parseMakerNote(NORangesSet<Buffer>* ifds,
     setup(true, 12);
   } else if (bs.hasPrefix("OLYMP", 5)) {   // old Olympus
     setup(true, 8);
+  } else if (bs.hasPrefix("OM SYSTEM", 9)) { // ex Olympus
+    setup(true, 16);
   } else if (bs.hasPrefix("EPSON", 5)) {
     setup(false, 8);
   } else if (bs.hasPatternAt("Exif", 4, 6)) {
@@ -281,12 +284,12 @@ void TiffIFD::add(TiffIFDOwner subIFD) {
   // We are good, and actually can add this sub-IFD, right?
   subIFD->recursivelyCheckSubIFDs(0);
 
-  subIFDs.push_back(move(subIFD));
+  subIFDs.push_back(std::move(subIFD));
 }
 
 void TiffIFD::add(TiffEntryOwner entry) {
   entry->parent = this;
-  entries[entry->tag] = move(entry);
+  entries[entry->tag] = std::move(entry);
 }
 
 TiffEntry* TiffIFD::getEntry(TiffTag tag) const {

@@ -20,23 +20,24 @@
 */
 
 #include "decoders/Rw2Decoder.h"
+#include "adt/Point.h"                              // for iPoint2D
 #include "common/Common.h"                          // for writeLog, DEBUG_...
-#include "common/Point.h"                           // for iPoint2D
-#include "decoders/RawDecoderException.h"           // for ThrowRDE
-#include "decompressors/PanasonicDecompressorV4.h"  // for PanasonicDecompr...
-#include "decompressors/PanasonicDecompressorV5.h"  // for PanasonicDecompr...
-#include "decompressors/PanasonicDecompressorV6.h"  // for PanasonicDecompr...
+#include "decoders/RawDecoderException.h"           // for ThrowException
+#include "decompressors/PanasonicV4Decompressor.h"  // for PanasonicV4Decom...
+#include "decompressors/PanasonicV5Decompressor.h"  // for PanasonicV5Decom...
+#include "decompressors/PanasonicV6Decompressor.h"  // for PanasonicV6Decom...
+#include "decompressors/PanasonicV7Decompressor.h"  // for PanasonicV7Decom...
 #include "decompressors/UncompressedDecompressor.h" // for UncompressedDeco...
 #include "io/Buffer.h"                              // for Buffer, DataBuffer
 #include "io/ByteStream.h"                          // for ByteStream
 #include "io/Endianness.h"                          // for Endianness, Endi...
 #include "metadata/Camera.h"                        // for Hints
-#include "metadata/ColorFilterArray.h" // for CFAColor::GREEN, Color...
-#include "tiff/TiffEntry.h"                         // for TiffEntry
-#include "tiff/TiffIFD.h"                           // for TiffIFD, TiffRoo...
-#include "tiff/TiffTag.h"                           // for TiffTag, PANASON...
+#include "metadata/ColorFilterArray.h"              // for CFAColor, CFACol...
+#include "tiff/TiffEntry.h"                         // for TiffEntry, TiffD...
+#include "tiff/TiffIFD.h"                           // for TiffRootIFD, Tif...
+#include "tiff/TiffTag.h"                           // for TiffTag, TiffTag...
 #include <array>                                    // for array
-#include <cmath>                                    // IWYU pragma: keep
+#include <cmath>                                    // for fabs
 #include <cstdint>                                  // for uint32_t, uint16_t
 #include <memory>                                   // for unique_ptr
 #include <string>                                   // for string, operator==
@@ -102,7 +103,7 @@ RawImage Rw2Decoder::decodeRawInternal() {
       u.decode12BitRaw<Endianness::little, false, true>(width, height);
     } else {
       uint32_t section_split_offset = 0;
-      PanasonicDecompressorV4 p(
+      PanasonicV4Decompressor p(
           mRaw,
           ByteStream(DataBuffer(mFile.getSubView(offset), Endianness::little)),
           hints.has("zero_is_not_bad"), section_split_offset);
@@ -130,22 +131,34 @@ RawImage Rw2Decoder::decodeRawInternal() {
                 raw->getEntry(TiffTag::PANASONIC_RAWFORMAT)->getU16()) {
     case 4: {
       uint32_t section_split_offset = 0x1FF8;
-      PanasonicDecompressorV4 p(mRaw, bs, hints.has("zero_is_not_bad"),
+      PanasonicV4Decompressor p(mRaw, bs, hints.has("zero_is_not_bad"),
                                 section_split_offset);
       mRaw->createData();
       p.decompress();
       return mRaw;
     }
     case 5: {
-      PanasonicDecompressorV5 v5(mRaw, bs, bitsPerSample);
+      PanasonicV5Decompressor v5(mRaw, bs, bitsPerSample);
       mRaw->createData();
       v5.decompress();
       return mRaw;
     }
     case 6: {
-      PanasonicDecompressorV6 v6(mRaw, bs);
+      if (bitsPerSample != 14)
+        ThrowRDE("Version %i: unexpected bits per sample: %i", version,
+                 bitsPerSample);
+      PanasonicV6Decompressor v6(mRaw, bs);
       mRaw->createData();
       v6.decompress();
+      return mRaw;
+    }
+    case 7: {
+      if (bitsPerSample != 14)
+        ThrowRDE("Version %i: unexpected bits per sample: %i", version,
+                 bitsPerSample);
+      PanasonicV7Decompressor v7(mRaw, bs);
+      mRaw->createData();
+      v7.decompress();
       return mRaw;
     }
     default:
